@@ -7,6 +7,7 @@ import (
 	"github.com/a3naumov/golang-ecom-backend-api/service/auth"
 	"github.com/a3naumov/golang-ecom-backend-api/types"
 	"github.com/a3naumov/golang-ecom-backend-api/utils"
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 )
 
@@ -28,12 +29,21 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
+	// get JSON payload
 	var payload types.RegisterUserPayload
 
-	if err := utils.ParseJSON(r, payload); err != nil {
+	if err := utils.ParseJSON(r, &payload); err != nil {
 		utils.WriteError(w, http.StatusBadRequest, err)
 	}
 
+	// validate the payload
+	if err := utils.Validate.Struct(payload); err != nil {
+		errors := err.(validator.ValidationErrors)
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid payload %v", errors))
+		return
+	}
+
+	// check is the user exists
 	_, err := h.store.GetUserByEmail(payload.Email)
 
 	if err == nil {
@@ -41,6 +51,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// hash password
 	hashedPassword, err := auth.HashPassword(payload.Password)
 
 	if err != nil {
@@ -48,6 +59,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// create user
 	err = h.store.CreateUser(types.User{
 		FirstName: payload.FirstName,
 		LastName:  payload.LastName,
